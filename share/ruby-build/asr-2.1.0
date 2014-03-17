@@ -1,0 +1,1 @@
+install_msi "asr-2.1.0" "http://www.artonx.org/data/asr/Ruby-2.1.0.msi" msi
