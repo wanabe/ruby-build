@@ -322,7 +322,7 @@ fetch_msi() {
   echo "Downloading $msi_file..."
   http get "$msi_url" "$msi_file"
   echo "Extracting $msi_file..."
-  wine msiexec /i "$msi_file" targetdir="${install_windir}_" /qb || echo ""
+  wine msiexec /i "$msi_file" targetdir="$install_windir" /qb || echo ""
   echo "Copying package files..."
   cp -r instdir "$msi_name"
   echo "Remove extracted files..."
