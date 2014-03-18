@@ -55,6 +55,20 @@ Or, if you would like to install the latest development release:
 
     brew install --HEAD ruby-build
 
+### Installing Ruby 2.x on Arch Linux
+
+If you are trying to install Ruby 2.x on Arch Linux (or similar), you may need
+to specify the `readline` location.
+
+    RUBY_CONFIGURE_OPTS=--with-readline-dir="/usr/lib/libreadline.so" rbenv install 2.1.0
+
+This should no longer be necessary once this [issue][] is resolved. Thanks to
+[**@ahacking**][ahacking] for [investigating this issue and contributing this
+workaround][workaround].
+
+[issue]: https://bugs.ruby-lang.org/issues/9630
+[ahacking]: https://github.com/ahacking
+[workaround]: https://github.com/sstephenson/ruby-build/issues/526
 
 ## Usage
 
@@ -63,7 +77,7 @@ Or, if you would like to install the latest development release:
 To install a Ruby version for use with rbenv, run `rbenv install` with the
 exact name of the version you want to install. For example,
 
-    rbenv install 1.9.3-p448
+    rbenv install 2.1.0
 
 Ruby versions will be installed into a directory of the same name under
 `~/.rbenv/versions`.
@@ -81,7 +95,7 @@ locations.
 Run the `ruby-build` command with the exact name of the version you want to
 install and the full path where you want to install it. For example,
 
-    ruby-build 1.9.3-p448 ~/local/ruby-1.9.3-p448
+    ruby-build 2.1.0 ~/local/ruby-2.1.0
 
 To see a list of all available Ruby versions, run `ruby-build --definitions`.
 
