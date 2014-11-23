@@ -144,6 +144,10 @@ install_package() {
   install_package_using "tarball" 1 "$@"
 }
 
+install_7z() {
+  install_package_using "7z" 2 "$@"
+}
+
 install_git() {
   install_package_using "git" 2 "$@"
 }
@@ -322,6 +326,42 @@ fetch_tarball() {
   fi
 
   { if tar $tar_args "$package_filename"; then
+      if [ -z "$KEEP_BUILD_PATH" ]; then
+        rm -f "$package_filename"
+      else
+        true
+      fi
+    fi
+  } >&4 2>&1
+}
+
+fetch_7z() {
+  local package_name="$1"
+  local package_url="$2"
+  local option_7z="$3"
+  local mirror_url
+  local checksum
+
+  if [ "$package_url" != "${package_url/\#}" ]; then
+    checksum="${package_url#*#}"
+    package_url="${package_url%%#*}"
+
+    if [ -n "$RUBY_BUILD_MIRROR_URL" ]; then
+      mirror_url="${RUBY_BUILD_MIRROR_URL}/$checksum"
+    fi
+  fi
+
+  local package_filename="${package_name}.7z"
+
+  if ! reuse_existing_tarball "$package_filename" "$checksum"; then
+    local zipped_filename=$(basename $package_url)
+    echo "Downloading ${zipped_filename}..." >&2
+    http head "$mirror_url" &&
+    download_tarball "$mirror_url" "$package_filename" "$checksum" ||
+    download_tarball "$package_url" "$package_filename" "$checksum"
+  fi
+
+  { if 7z x "$option_7z" "$package_filename"; then
       if [ -z "$KEEP_BUILD_PATH" ]; then
         rm -f "$package_filename"
       else
@@ -635,6 +675,47 @@ remove_windows_files() {
 build_package_copy() {
   mkdir -p "$PREFIX_PATH"
   cp -fR . "$PREFIX_PATH"
+}
+
+build_package_mingw() {
+  build_package_copy
+  for exe in $PREFIX_PATH/bin/*.exe; do
+    local scr=${exe%.*}
+    echo "#!/bin/sh" > $scr
+    echo "export WINEDEBUG=-all" >> $scr
+    echo "wine $exe \"\$@\"" >> $scr
+    chmod a+x $scr
+  done
+  for bat in "$PREFIX_PATH/bin/*.bat"; do
+    local scr=${bat%.*}
+    sed -i.bat -e '1s/^#!.*/#!\/bin\/sh '"$(echo $PREFIX_PATH|sed -e 's/\//\\\//g')"'\/bin\/ruby/' $scr
+    chmod a+x $scr
+    rm $bat
+  done
+  regedit /e - "HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services\Tcpip\Parameters"|grep DataBasePath > /dev/null && return
+  echo "Creating registry key to resolve host in ruby..." >&2
+  echo "[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters]"$'\n''"DataBasePath"=hex(1):5a, 00, 3a, 00, 5c, 00, 65, 00, 74, 00, 63, 00, 00, 00'|wine regedit -
+}
+
+build_package_devkit() {
+  local version=${PREFIX_PATH##*/}
+  PREFIX_PATH="${RBENV_ROOT}/share/$DEVKIT_VERSION"
+  if [ ! -e "$PREFIX_PATH" ]; then
+    mkdir -p "${RBENV_ROOT}/share"
+    install_7z "$DEVKIT_VERSION" "http://cdn.rubyinstaller.org/archives/devkits/${DEVKIT_VERSION}-sfx.exe" "-o$DEVKIT_VERSION" copy
+  fi
+  local orig_version="$RBENV_VERSION"
+  RBENV_VERSION="$version"
+  echo "Setting up $DEVKIT_VERSION with ${version}..."
+  {
+    cd "$PREFIX_PATH"
+    rbenv local "$version"
+    ruby dk.rb init || echo -n ""
+    grep "/versions/$version" "${PREFIX_PATH}/config.yml" >/dev/null || \
+      echo "- Z:${RBENV_ROOT}/versions/$version" >> config.yml
+    ruby dk.rb install
+  }
+  RBENV_VERSION="$orig_version"
 }
 
 before_install_package() {
