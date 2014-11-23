@@ -686,7 +686,7 @@ build_package_mingw() {
     echo "wine $exe \"\$@\"" >> $scr
     chmod a+x $scr
   done
-  for bat in "$PREFIX_PATH/bin/*.bat"; do
+  for bat in $PREFIX_PATH/bin/*.bat; do
     local scr=${bat%.*}
     sed -i.bat -e '1s/^#!.*/#!\/bin\/sh '"$(echo $PREFIX_PATH|sed -e 's/\//\\\//g')"'\/bin\/ruby/' $scr
     chmod a+x $scr
