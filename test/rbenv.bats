@@ -69,7 +69,7 @@ See all available versions with \`rbenv install --list'.
 
 If the version you need is missing, try upgrading ruby-build:
 
-  cd ${BATS_TEST_DIRNAME}/.. && git pull
+  cd ${BATS_TEST_DIRNAME}/.. && git pull && cd -
 OUT
 
   unstub ruby-build
@@ -145,4 +145,43 @@ OUT
 ${RBENV_ROOT}/plugins/bar/share/ruby-build
 ${RBENV_ROOT}/plugins/foo/share/ruby-build
 OUT
+}
+
+@test "not enough arguments for rbenv-install" {
+  stub_ruby_build
+  run rbenv-install
+  assert_failure
+  assert_output_contains 'Usage: rbenv install'
+}
+
+@test "too many arguments for rbenv-install" {
+  stub_ruby_build
+  run rbenv-install 2.1.1 2.1.2
+  assert_failure
+  assert_output_contains 'Usage: rbenv install'
+}
+
+@test "show help for rbenv-install" {
+  stub_ruby_build
+  run rbenv-install -h
+  assert_success
+  assert_output_contains 'Usage: rbenv install'
+}
+
+@test "not enough arguments rbenv-uninstall" {
+  run rbenv-uninstall
+  assert_failure
+  assert_output_contains 'Usage: rbenv uninstall'
+}
+
+@test "too many arguments for rbenv-uninstall" {
+  run rbenv-uninstall 2.1.1 2.1.2
+  assert_failure
+  assert_output_contains 'Usage: rbenv uninstall'
+}
+
+@test "show help for rbenv-uninstall" {
+  run rbenv-uninstall -h
+  assert_success
+  assert_output_contains 'Usage: rbenv uninstall'
 }

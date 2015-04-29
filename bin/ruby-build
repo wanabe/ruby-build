@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
+#
+# Usage: ruby-build [-kvp] <definition> <prefix>
+#        ruby-build --definitions
+#
+#   -k/--keep        Do not remove source tree after installation
+#   -v/--verbose     Verbose mode: print compilation status to stdout
+#   -p/--patch       Apply a patch from stdin before building
+#   -4/--ipv4        Resolve names to IPv4 addresses only
+#   -6/--ipv6        Resolve names to IPv6 addresses only
+#   --definitions    List all built-in definitions
+#
 
-RUBY_BUILD_VERSION="20141113"
+RUBY_BUILD_VERSION="20150413"
 
 set -E
 exec 3<&2 # preserve original stderr at fd 3
@@ -207,7 +218,7 @@ compute_sha2() {
     output="$(shasum -a 256 -b)" || return 1
     echo "${output% *}"
   elif type openssl &>/dev/null; then
-    local openssl="$(command -v "$(brew --prefix openssl 2>/dev/null)"/bin/openssl openssl | head -1)"
+    local openssl="$(command -v "$(brew --prefix openssl 2>/dev/null || true)"/bin/openssl openssl | head -1)"
     output="$("$openssl" dgst -sha256 2>/dev/null)" || return 1
     echo "${output##* }"
   elif type sha256sum &>/dev/null; then
@@ -283,19 +294,31 @@ http() {
 }
 
 http_head_curl() {
-  curl -qsILf "$1" >&4 2>&1
+  options=""
+  [ -n "${IPV4}" ] && options="--ipv4"
+  [ -n "${IPV6}" ] && options="--ipv6"
+  curl -qsILf ${options} "$1" >&4 2>&1
 }
 
 http_get_curl() {
-  curl -q -o "${2:--}" -sSLf "$1"
+  options=""
+  [ -n "${IPV4}" ] && options="--ipv4"
+  [ -n "${IPV6}" ] && options="--ipv6"
+  curl -q -o "${2:--}" -sSLf ${options} "$1"
 }
 
 http_head_wget() {
-  wget -q --spider "$1" >&4 2>&1
+  options=""
+  [ -n "${IPV4}" ] && options="--inet4-only"
+  [ -n "${IPV6}" ] && options="--inet6-only"
+  wget -q --spider ${options} "$1" >&4 2>&1
 }
 
 http_get_wget() {
-  wget -nv -O "${2:--}" "$1"
+  options=""
+  [ -n "${IPV4}" ] && options="--inet4-only"
+  [ -n "${IPV6}" ] && options="--inet6-only"
+  wget -nv ${options} -O "${2:--}" "$1"
 }
 
 fetch_tarball() {
@@ -798,7 +821,7 @@ fix_rbx_gem_binstubs() {
       binstub="${bindir}/${file##*/}"
       rm -f "$binstub"
       { echo "#!${bindir}/ruby"
-        cat "$file"
+        grep -v '^#!' "$file"
       } > "$binstub"
       chmod +x "$binstub"
     done
@@ -815,7 +838,7 @@ fix_rbx_irb() {
 }
 
 require_java7() {
-  local version="$(java -version 2>&1 | head -1)"
+  local version="$(java -version 2>&1 | grep 'java version' | head -1)"
   if [[ $version != *1.[789]* ]]; then
     colorize 1 "ERROR" >&3
     echo ": Java 7 required. Please install a 1.7-compatible JRE." >&3
@@ -926,7 +949,28 @@ require_llvm() {
   local llvm_version="$1"
   if [ "$(uname -s)" = "Darwin" ] && [ "$(osx_version)" -ge 1010 ]; then
     if [[ "$RUBY_CONFIGURE_OPTS" != *--llvm-* ]]; then
-      package_option ruby configure --prebuilt-name="llvm-3.2-x86_64-apple-darwin13.tar.bz2"
+      if [ "$llvm_version" = "3.2" ]; then
+        package_option ruby configure --prebuilt-name="llvm-3.2-x86_64-apple-darwin13.tar.bz2"
+      else
+        local llvm_prefix="$(brew --prefix llvm 2>/dev/null || true)"
+        local llvm_config="${llvm_prefix}/bin/llvm-config"
+        if [ -x "$llvm_config" ]; then
+          package_option ruby configure --llvm-config="$llvm_config"
+        else
+          { echo
+            colorize 1 "ERROR"
+            echo ": Rubinius will not be able to compile using Apple's LLVM-based "
+            echo "build tools on OS X. You will need to install LLVM 3.5 first."
+            echo
+            colorize 1 "TO FIX THE PROBLEM"
+            echo ": Install Homebrew's llvm package with this"
+            echo -n "command: "
+            colorize 4 "brew install llvm"
+            echo
+          } >&3
+          return 1
+        fi
+      fi
     fi
   fi
 }
@@ -1091,14 +1135,8 @@ version() {
 }
 
 usage() {
-  { version
-    echo "usage: ruby-build [-k|--keep] [-v|--verbose] [-p|--patch] definition prefix"
-    echo "       ruby-build --definitions"
-  } >&2
-
-  if [ -z "$1" ]; then
-    exit 1
-  fi
+  sed -ne '/^#/!q;s/.\{1,2\}//;1,2d;p' < "$0"
+  [ -z "$1" ] || exit "$1"
 }
 
 list_definitions() {
@@ -1117,6 +1155,8 @@ sort_versions() {
 unset VERBOSE
 unset KEEP_BUILD_PATH
 unset HAS_PATCH
+unset IPV4
+unset IPV6
 
 RUBY_BUILD_INSTALL_PREFIX="$(abs_dirname "$0")/.."
 
@@ -1129,15 +1169,9 @@ parse_options "$@"
 for option in "${OPTIONS[@]}"; do
   case "$option" in
   "h" | "help" )
-    usage without_exiting
-    { echo
-      echo "  -k/--keep        Do not remove source tree after installation"
-      echo "  -v/--verbose     Verbose mode: print compilation status to stdout"
-      echo "  -p/--patch       Apply a patch from stdin before building"
-      echo "  --definitions    List all built-in definitions"
-      echo
-    } >&2
-    exit 0
+    version
+    echo
+    usage 0
     ;;
   "definitions" )
     list_definitions
@@ -1152,6 +1186,12 @@ for option in "${OPTIONS[@]}"; do
   "p" | "patch" )
     HAS_PATCH=true
     ;;
+  "4" | "ipv4")
+    IPV4=true
+    ;;
+  "6" | "ipv6")
+    IPV6=true
+    ;;
   "version" )
     version
     exit 0
@@ -1159,9 +1199,11 @@ for option in "${OPTIONS[@]}"; do
   esac
 done
 
+[ "${#ARGUMENTS[@]}" -eq 2 ] || usage 1 >&2
+
 DEFINITION_PATH="${ARGUMENTS[0]}"
 if [ -z "$DEFINITION_PATH" ]; then
-  usage
+  usage 1 >&2
 elif [ ! -f "$DEFINITION_PATH" ]; then
   for DEFINITION_DIR in "${RUBY_BUILD_DEFINITIONS[@]}"; do
     if [ -f "${DEFINITION_DIR}/${DEFINITION_PATH}" ]; then
@@ -1178,7 +1220,7 @@ fi
 
 PREFIX_PATH="${ARGUMENTS[1]}"
 if [ -z "$PREFIX_PATH" ]; then
-  usage
+  usage 1 >&2
 elif [ "${PREFIX_PATH#/}" = "$PREFIX_PATH" ]; then
   PREFIX_PATH="${PWD}/${PREFIX_PATH}"
 fi

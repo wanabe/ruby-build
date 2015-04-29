@@ -487,7 +487,6 @@ OUT
   run cat "${INSTALL_ROOT}/bin/rake"
   assert_output <<OUT
 #!${INSTALL_ROOT}/bin/ruby
-#!rbx
 puts 'rake'
 OUT
 
@@ -495,7 +494,6 @@ OUT
   run cat "${INSTALL_ROOT}/bin/irb"
   assert_output <<OUT
 #!${INSTALL_ROOT}/bin/ruby
-#!rbx
 print '>>'
 OUT
 }
@@ -581,6 +579,18 @@ DEF
   cached_tarball "jruby-9000.dev" bin/jruby
 
   stub java '-version : echo java version "1.7.0_21" >&2'
+
+  run_inline_definition <<DEF
+require_java7
+install_package "jruby-9000.dev" "http://ci.jruby.org/jruby-dist-9000.dev-bin.tar.gz" jruby
+DEF
+  assert_success
+}
+
+@test "Java version string not on first line" {
+  cached_tarball "jruby-9000.dev" bin/jruby
+
+  stub java "-version : echo 'Picked up JAVA_TOOL_OPTIONS' >&2; echo 'java version \"1.8.0_31\"' >&2"
 
   run_inline_definition <<DEF
 require_java7
