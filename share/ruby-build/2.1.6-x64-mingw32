@@ -1,0 +1,2 @@
+DEVKIT_VERSION="DevKit-mingw64-64-4.7.2-20130224-1432"
+install_7z "ruby-2.1.6-x64-mingw32" "http://dl.bintray.com/oneclick/rubyinstaller/ruby-2.1.6-x64-mingw32.7z#a443794bc4c22091193eccf0b02f763e" "" mingw devkit
