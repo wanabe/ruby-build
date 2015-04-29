@@ -1,0 +1,1 @@
+install_msi "2.2-i386-mswin32_100" "http://www.artonx.org/data/asr/Ruby-2.2.msi" asr
